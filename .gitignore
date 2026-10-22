@@ -1,0 +1,16 @@
+.venv/
+.state/
+.machine.json
+*.p8
+*.p12
+*.mobileprovision
+*.ipa
+*.xcarchive/
+__pycache__/
+.DS_Store
+fastlane/report.xml
+fastlane/README.md
+dist/
+.ios-release/reports/
+.ios-release/.state/
+.ios-release/.machine.json

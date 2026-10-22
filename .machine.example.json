@@ -1,0 +1,6 @@
+{
+  "source_root": "/Users/yourname/Developer",
+  "key_id": "YOUR_KEY_ID",
+  "issuer_id": "YOUR_ISSUER_ID",
+  "key_path": "~/.appstoreconnect/private_keys/AuthKey_YOUR_KEY_ID.p8"
+}

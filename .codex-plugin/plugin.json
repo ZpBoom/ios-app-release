@@ -1,0 +1,15 @@
+{
+  "name": "ios-app-release",
+  "version": "0.3.0",
+  "description": "iOS 工程自动识别、多语言发布检查及审核后手动发布",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "iOS 自动发布",
+    "shortDescription": "在当前 App 项目中检查、上传、提审和上线"
+  },
+  "extensions": {
+    "com.openai": {
+      "onboardingSkill": "./skills/ios-release-setup/SKILL.md"
+    }
+  }
+}

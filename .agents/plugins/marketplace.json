@@ -1,0 +1,12 @@
+{
+  "name": "ios-release-tools",
+  "interface": {"displayName": "iOS 发布工具"},
+  "plugins": [
+    {
+      "name": "ios-app-release",
+      "source": {"source": "local", "path": "./plugins/ios-app-release"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_USE"},
+      "category": "Productivity"
+    }
+  ]
+}

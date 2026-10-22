@@ -1,0 +1,70 @@
+require "json"
+
+default_platform(:ios)
+
+platform :ios do
+  # Python resolves machine-specific paths and supplies only the selected app.
+  def release_config
+    JSON.parse(File.read(ENV.fetch("IOS_RELEASE_CONFIG")))
+  end
+
+  def release_key
+    app_store_connect_api_key(
+      key_id: ENV.fetch("ASC_KEY_ID"),
+      issuer_id: ENV["ASC_ISSUER_ID"].to_s.empty? ? nil : ENV["ASC_ISSUER_ID"],
+      key_filepath: ENV.fetch("ASC_KEY_PATH"),
+      in_house: false
+    )
+  end
+
+  lane :archive do
+    c = release_config
+    options = {
+      scheme: c.fetch("scheme"),
+      configuration: "Release",
+      clean: true,
+      export_team_id: c.fetch("team_id"),
+      export_options: c.fetch("export_options"),
+      output_directory: c.fetch("output"),
+      output_name: "app.ipa",
+      buildlog_path: File.join(c.fetch("output"), "logs"),
+      xcargs: "MARKETING_VERSION=#{c.fetch('version')} CURRENT_PROJECT_VERSION=#{c.fetch('build')} DEVELOPMENT_TEAM=#{c.fetch('team_id')}"
+    }
+    if c["workspace"]
+      options[:workspace] = File.join(c.fetch("source"), c.fetch("workspace"))
+    else
+      options[:project] = File.join(c.fetch("source"), c.fetch("project"))
+    end
+    build_app(**options)
+  end
+
+  lane :upload do
+    c = release_config
+    upload_to_testflight(
+      api_key: release_key,
+      app_identifier: c.fetch("bundle_id"),
+      apple_id: c.fetch("app_store_id"),
+      ipa: File.join(c.fetch("output"), "app.ipa"),
+      skip_submission: true,
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  lane :submit do
+    c = release_config
+    upload_to_app_store(
+      api_key: release_key,
+      app_identifier: c.fetch("bundle_id"),
+      app_version: c.fetch("version"),
+      build_number: c.fetch("build"),
+      platform: "ios",
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: true,
+      submit_for_review: true,
+      automatic_release: false,
+      force: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+end

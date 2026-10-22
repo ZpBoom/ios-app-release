@@ -1,0 +1,10 @@
+{
+  "bundle_id": "com.example.MyApp",
+  "app_store_id": "1234567890",
+  "source": "MyApp",
+  "project": "MyApp.xcodeproj",
+  "scheme": "MyApp",
+  "team_id": "ABCDE12345",
+  "locales": ["zh-Hans", "en-US"],
+  "export_options": {"method": "app-store-connect", "signingStyle": "automatic"}
+}
