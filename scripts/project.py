@@ -98,7 +98,7 @@ def main():
             bind(project, report, args.locales.split(",") if args.locales else None)
             return 0
         if args.command in ("check", "inspect"):
-            return 0 if report["ready_for_prepare"] else 2
+            return 0 if report["ready_for_prepare"] and not report.get("submission_blockers") else 2
         if not report["ready_for_prepare"]:
             raise core.ReleaseError("发布检查尚有阻塞项，未执行打包上传")
         existing = report["online"].get("matching_builds", [])

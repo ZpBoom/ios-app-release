@@ -139,6 +139,27 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(report["coverage"]["not_verified"])
         api.request.assert_not_called()
 
+    def test_export_compliance_blocks_check_but_allows_metadata_recovery(self):
+        for command in ("check", "inspect", "prepare"):
+            with self.subTest(command=command), tempfile.TemporaryDirectory() as directory:
+                project = Path(directory)
+                report = {"checks": [], "ready_for_prepare": True, "submission_blockers": ["Missing encryption declaration"],
+                          "online": {"matching_builds": [{"id": "b1", "state": "VALID", "expired": False}]}}
+                argv = ["project.py", command, "--project", directory]
+                if command == "prepare":
+                    argv.append("--execute")
+                with patch.object(core, "ROOT", project / ".ios-release"), patch.object(
+                        entry, "configs", return_value=({"bundle_id": "com.test.app"}, {"version": "1.0", "build": "1"})), patch.object(
+                        core, "load_app"), patch.object(p, "report_project", return_value=report), patch.object(
+                        p, "save_report"), patch.object(entry.subprocess, "run", return_value=Mock(returncode=0)) as run, patch.object(
+                        sys, "argv", argv):
+                    code = entry.main()
+                self.assertEqual(code, 0 if command == "prepare" else 2)
+                if command == "prepare":
+                    self.assertIn("--metadata-only", run.call_args.args[0])
+                else:
+                    run.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

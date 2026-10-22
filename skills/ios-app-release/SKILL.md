@@ -50,6 +50,14 @@ description: 在当前原生 Xcode iOS App 的开发聊天中识别工程和已�
 
 向用户汇报：识别到的 App、发布类型、目标版本/构建、拟上传语言与内容、阻塞项、可自动修复项及仍待核实项目；提供报告链接。可根据已有授权修复可逆的配置和资料问题，不因例行小修复重复请求确认。
 
+### 出口合规
+
+检查报告中的 `local_export_compliance`、`build_export_compliance` 和 `submission_blockers`。`ready_for_prepare` 仅表示可准备上传或同步资料，不表示可提审。构建尚未上传或仍在处理时，等待指定构建变为 VALID 后重新检查。
+
+提审前，远端指定构建必须明确声明 `usesNonExemptEncryption=false`，或在值为 `true` 时关联 Apple 已批准的出口合规文稿。字段缺失、文稿缺失/未获批或无法查询时停止提审。`submit` 会在任何提审写入前再次核实，不自动填写声明。
+
+构建显示“缺少出口合规证明”时，优先在 App Store Connect 的构建版本旁点“管理”，按 App 和第三方 SDK 的真实加密使用完成问卷；已上传构建可补填，不因缺少字段重复打包上传。经核实属于豁免后，可为后续构建在实际主 App 的 Info.plist 配置布尔值 `ITSAppUsesNonExemptEncryption=NO`；需非豁免文稿时按 Apple 要求关联。不能只凭应用类型、HTTPS 调用、旧版声明或 SDK 方法名猜测豁免，也不能为消除提示自动设置 NO。检查声明完整性不等于确认法律合规。
+
 ## 准备、提审、上线
 
 用户要求准备发布/上传时，整理文案和资料，执行 `check`。阻塞项解除后执行：

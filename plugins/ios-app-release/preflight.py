@@ -4,6 +4,7 @@ import html
 import json
 import os
 from pathlib import Path
+import plistlib
 import re
 import subprocess
 
@@ -44,6 +45,42 @@ def xcode_json(args, project):
         return json.loads(result.stdout)
     except ValueError as e:
         raise core.ReleaseError("Xcode 没有返回有效 JSON") from e
+
+
+def local_export_compliance(project, selected, settings, report):
+    """Inspect the selected main target, never an arbitrary Info.plist in the tree."""
+    value, origin = None, None
+    source = settings.get("INFOPLIST_FILE")
+    override = settings.get("INFOPLIST_KEY_ITSAppUsesNonExemptEncryption")
+    generated_override = settings.get("GENERATE_INFOPLIST_FILE") == "YES" and override is not None
+    if source and not generated_override:
+        # Xcode normally expands build variables in -showBuildSettings output.
+        source = re.sub(r"\$\(([^)]+)\)|\$\{([^}]+)\}",
+                        lambda m: settings.get(m[1] or m[2], m[0]), source)
+        path = Path(source)
+        if not path.is_absolute():
+            path = Path(settings.get("SRCROOT") or settings.get("PROJECT_DIR") or project / Path(selected).parent) / path
+        origin = str(path)
+        try:
+            with path.open("rb") as stream:
+                plist = plistlib.load(stream)
+            if not isinstance(plist, dict):
+                raise ValueError("Info.plist 顶层必须为字典")
+            value = plist.get("ITSAppUsesNonExemptEncryption")
+        except (OSError, ValueError, plistlib.InvalidFileException) as e:
+            item(report, "local_export_compliance", "warning", "无法读取主 App 的出口合规配置；上传后仍需核实构建声明",
+                 {"source": origin, "error": str(e)})
+            return
+    if generated_override:
+        value = {"yes": True, "no": False, "true": True, "false": False, "1": True, "0": False}.get(str(override).strip().lower())
+        origin = "INFOPLIST_KEY_ITSAppUsesNonExemptEncryption"
+    evidence = {"source": origin, "ITSAppUsesNonExemptEncryption": value}
+    if type(value) is bool:
+        item(report, "local_export_compliance", "pass", "主 App 已配置出口合规声明（%s）；需以实际上传构建为准" % (
+            "YES，上传后需核实关联文稿" if value else "NO"), evidence)
+    else:
+        item(report, "local_export_compliance", "warning",
+             "主 App 未配置有效的 ITSAppUsesNonExemptEncryption 布尔值；上传后需完成加密问卷。请核实 App 和第三方 SDK 后配置，不自动设为 NO", evidence)
 
 
 def discover(project, report, selected=None, scheme=None, target=None):
@@ -126,6 +163,7 @@ def discover(project, report, selected=None, scheme=None, target=None):
              "工程 %s：%s" % (key, value or "未解析"))
     report["identity"] = result
     item(report, "xcode_discovery", "pass", "已识别 Release 配置的 iOS 主 App", selected)
+    local_export_compliance(project, selected, s, report)
     return result
 
 
@@ -192,13 +230,22 @@ def remote(api, identity, desired, build, report, expected_id=None):
     builds = api.list("/v1/builds", {"filter[app]": app["id"], "filter[version]": build,
         "filter[preReleaseVersion.version]": desired, "filter[preReleaseVersion.platform]": "IOS", "limit": 200})
     online["matching_builds"] = [{"id": b["id"], "state": b["attributes"].get("processingState"),
-                                  "expired": b["attributes"].get("expired", False)} for b in builds]
+                                  "expired": b["attributes"].get("expired", False),
+                                  "usesNonExemptEncryption": b["attributes"].get("usesNonExemptEncryption")} for b in builds]
     if builds:
         invalid = len(builds) != 1 or any(b["attributes"].get("expired") or
             b["attributes"].get("processingState") in {"INVALID", "FAILED"} for b in builds)
         item(report, "existing_build", "blocker" if invalid else "warning",
              "同号构建无效、过期或不唯一，需处理" if invalid else "此版本/构建号已经存在，沿用远端构建，避免重复上传",
              online["matching_builds"])
+        if not invalid and builds[0]["attributes"].get("processingState") == "VALID":
+            compliance = core.build_export_compliance(api, builds[0])
+            online["matching_builds"][0]["export_compliance"] = compliance
+            # Missing compliance stops submission, not archival or metadata recovery.
+            item(report, "build_export_compliance", "pass" if compliance["ready"] else "warning",
+                 compliance["summary"], compliance)
+            if not compliance["ready"]:
+                report.setdefault("submission_blockers", []).append(compliance["summary"])
     else:
         item(report, "existing_build", "pass", "尚无此版本/构建号，需要归档上传")
 
@@ -206,7 +253,8 @@ def remote(api, identity, desired, build, report, expected_id=None):
 def report_project(project, *, selected=None, scheme=None, target=None, offline=False, api=None, config=None, release=None):
     report = {"schema_version": 1, "checked_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "project": str(project), "checks": [], "online": {"release_kind": "UNKNOWN", "version_action": "NOT_CHECKED"},
-              "coverage": {"automated": ["Xcode 工程身份", "版本与构建号", "App 线上版本路由", "版本文案完整性"],
+              "submission_blockers": [],
+              "coverage": {"automated": ["Xcode 工程身份", "版本与构建号", "App 线上版本路由", "版本文案完整性", "主 App 出口合规配置及有效远端构建的声明状态"],
                            "not_verified": ["实际功能与回归测试", "证书和描述文件是否能成功导出", "截图内容与尺寸", "隐私和合规声明真实性", "协议/税务/销售地区", "审核账号与内购资料"]}}
     if config:
         selected = selected or config.get("workspace", config.get("project"))
@@ -262,10 +310,11 @@ def save_report(project, report):
             html.escape(check["level"]), html.escape(check["level"].upper()), html.escape(check["summary"]), html.escape(detail)))
     body = """<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>iOS 发布检查</title>
 <style>body{font:16px system-ui;max-width:1000px;margin:32px auto;padding:20px}li{padding:12px;margin:8px 0;border-left:4px solid #889}pre{white-space:pre-wrap}.blocker{border-color:#c33}.pass{border-color:#298}.warning{border-color:#d90}</style>
-<h1>iOS 发布检查</h1><p>%s</p><p>发布类型：%s；版本动作：%s</p><p>可准备上传：%s。此结果不代表可直接提审或已通过功能测试。</p><ul>%s</ul><h2>待独立验证</h2><pre>%s</pre></html>""" % (
+<h1>iOS 发布检查</h1><p>%s</p><p>发布类型：%s；版本动作：%s</p><p>可准备上传：%s。此结果不代表可直接提审或已通过功能测试。</p><ul>%s</ul><h2>出口合规提审阻塞项</h2><pre>%s</pre><h2>待独立验证</h2><pre>%s</pre></html>""" % (
         html.escape(report["project"]), html.escape(report["online"]["release_kind"]),
         html.escape(report["online"]["version_action"]), "是" if report["ready_for_prepare"] else "否",
-        "".join(rows), html.escape("\n".join(report["coverage"]["not_verified"])))
+        "".join(rows), html.escape("\n".join(report.get("submission_blockers", [])) or "未发现已检查构建的出口合规阻塞；不代表其他提审条件已满足"),
+        html.escape("\n".join(report["coverage"]["not_verified"])))
     (directory / "preflight.html").write_text(body, encoding="utf-8")
     print("检查结果：%s；类型：%s；动作：%s" % (
         "可准备上传" if report["ready_for_prepare"] else "有待处理事项", report["online"]["release_kind"], report["online"]["version_action"]))

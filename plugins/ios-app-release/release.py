@@ -205,6 +205,33 @@ def remote_build(api, c, r):
     return b
 
 
+def build_export_compliance(api, build):
+    """Read declaration completeness without inferring or changing encryption use."""
+    value = build.get("attributes", {}).get("usesNonExemptEncryption")
+    result = {"build_id": build["id"], "usesNonExemptEncryption": value, "ready": False}
+    if value is False:
+        return dict(result, ready=True, status="EXEMPT",
+                    summary="构建已声明不使用非豁免加密；声明真实性仍需按 App 和第三方 SDK 核实")
+    if value is not True:
+        return dict(result, status="MISSING", summary=(
+            "构建缺少出口合规信息：usesNonExemptEncryption 未填写。请在 App Store Connect 的构建版本旁点“管理”完成加密问卷；"
+            "已上传构建可直接补填，无需重新上传。仅在核实 App 及第三方 SDK 属于豁免后，才为后续构建配置 "
+            "Info.plist 的 ITSAppUsesNonExemptEncryption=NO；插件不会自动猜填。"))
+    try:
+        declaration = api.request("GET", "/v1/builds/%s/appEncryptionDeclaration" % build["id"])["data"]
+    except (ReleaseError, KeyError, TypeError) as e:
+        return dict(result, status="UNKNOWN", summary="无法核实构建出口合规文稿，提审前必须重查：%s" % e)
+    if not declaration:
+        return dict(result, status="DOCUMENT_MISSING", summary=(
+            "构建声明使用非豁免加密，但尚未关联出口合规文稿；请在 App Store Connect 上传并关联适用的文稿，等待 Apple 批准。"))
+    state = declaration.get("attributes", {}).get("appEncryptionDeclarationState")
+    result.update(declaration_id=declaration["id"], declaration_state=state)
+    if state == "APPROVED":
+        return dict(result, ready=True, status="APPROVED", summary="构建已关联 Apple 批准的出口合规文稿")
+    return dict(result, status="DOCUMENT_NOT_APPROVED",
+                summary="构建出口合规文稿尚未获批（%s）；请在 App Store Connect 处理后重新检查" % (state or "未知状态"))
+
+
 def output_dir(slug, r):
     return ROOT / ".state" / slug / r["version"] / r["build"]
 
@@ -367,6 +394,9 @@ def submit(api, slug, c, r, settings):
     if changes:
         raise ReleaseError("远端文案与本地不同，请先 diff 和 prepare --metadata-only")
     b = remote_build(api, c, r)
+    compliance = build_export_compliance(api, b)
+    if not compliance["ready"]:
+        raise ReleaseError("出口合规检查未通过，未执行提审：" + compliance["summary"])
     api.request("PATCH", "/v1/appStoreVersions/" + v["id"], resource("appStoreVersions",
         relationships={"build": ("builds", b["id"])}, identity=v["id"]))
     fastlane("submit", slug, c, r, settings)
