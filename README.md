@@ -4,11 +4,11 @@
 
 插件包含 Skill、检查器、发布脚本和 fastlane 配置。App 源码留在原项目，不必复制工具或切换到专门的发布聊天。
 
-当前是 0.3.0 开发版本，已通过离线测试、fastlane 模拟检查和本机 Codex 原生插件安装验证；尚未使用真实 App/Apple 凭据完成归档上传、提审或上线实测。
+当前是 0.3.1 开发版本，已通过离线测试、fastlane 模拟检查和本机 Codex 原生插件安装验证；尚未使用真实 App/Apple 凭据完成归档上传、提审或上线实测。
 
-私有仓库：[ZpBoom/ios-app-release](https://github.com/ZpBoom/ios-app-release)。给同事复制的完整安装提示词见 [INSTALL_FOR_CODEX.md](INSTALL_FOR_CODEX.md)。同事的 GitHub 账号需要先获得这个私库的访问权限。
+公开仓库：[ZpBoom/ios-app-release](https://github.com/ZpBoom/ios-app-release)。任何人均可读取和安装，原仓库仅由 ZpBoom 账号维护，不向其他账号授予写权限。给同事复制的完整安装提示词见 [INSTALL_FOR_CODEX.md](INSTALL_FOR_CODEX.md)。
 
-## 私有 Git 分发与安装
+## Git 分发与安装
 
 更新插件代码后，提交前执行：
 
@@ -31,7 +31,7 @@ codex plugin add ios-app-release@ios-release-tools --json
 python3 <installedPath>/scripts/bootstrap.py --auto
 ```
 
-私仓访问复用本机已有 Git/SSH 授权，未授权时先完成 Git 登录。不要把访问令牌写进指令或仓库。无需发布到公共插件目录。
+此公开仓库的读取和安装不需要 GitHub 写权限或协作者邀请。其他人可以复制或 Fork 代码，但无法直接推送到原仓库。不要把 GitHub 访问令牌或 Apple 密钥写进指令或仓库。无需发布到公共插件目录。
 
 本地安装开发版也可使用：
 
@@ -60,7 +60,7 @@ python3 <插件目录>/scripts/bootstrap.py --auto
 
 | 位置 | 内容 | 如何共享 |
 |---|---|---|
-| Codex 安装的插件目录 | Skill、检查器、发布工具 | 私有 Git marketplace 安装/更新 |
+| Codex 安装的插件目录 | Skill、检查器、发布工具 | Git marketplace 安装/更新 |
 | `~/.config/ios-app-release/` | 本机 API 配置、独立 Python/Ruby 依赖 | 不共享 |
 | 当前 App 的 `.ios-release/` | 工程绑定、版本、多语言文案、报告和构建结果 | 配置/文案进 App 仓库，报告/构建结果忽略 |
 
@@ -155,7 +155,7 @@ Codex 完成多语言整理、检查和上传；你检查实际 App、文案和�
 - 上传超时后检查 Apple 构建列表，`status` 只查商店版本；构建已上传可用资料同步恢复。
 - 提审/发布结果未知时先查远端，不盲目重试。发布请求无法取消。
 - 本机有同 App 互斥锁，尚无跨电脑分布式锁；避免同时操作同 App/版本，并分配唯一构建号。
-- 私有 Git 访问依赖各电脑的 Git 认证和账号权限，浏览器已登录不代表终端 Git 已授权。
+- 公开仓库可直接读取安装。写入原仓库仍需所有者 ZpBoom 的 Git 授权，不向安装者授予写权限。
 
 ## 开发验证
 

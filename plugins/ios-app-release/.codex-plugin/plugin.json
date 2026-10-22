@@ -1,6 +1,6 @@
 {
   "name": "ios-app-release",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "iOS 工程自动识别、多语言发布检查及审核后手动发布",
   "skills": "./skills/",
   "interface": {

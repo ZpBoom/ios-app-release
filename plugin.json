@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "ios-app-release",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "在现有 iOS App 开发聊天中识别工程、复查资料、判断首次上架或更新、打包上传并分阶段发布。",
   "extensions": {
     "com.openai": {
